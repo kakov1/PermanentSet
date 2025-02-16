@@ -33,7 +33,7 @@ int main() {
 
       set.insert(key);
 
-      std::vector<int> versioned_keys = set.get_versioned();
+      std::list<int> versioned_keys = set.get_versioned();
 
       for (const auto &key : versioned_keys) {
         std::cout << key << " ";
