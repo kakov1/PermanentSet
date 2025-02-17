@@ -1,5 +1,4 @@
 #include "permanent_set.hpp"
-#include <iostream>
 
 using namespace hwt;
 int main() {
@@ -31,11 +30,9 @@ int main() {
         throw std::runtime_error("Key must be integer.");
       }
 
-      set.insert(key);
+      std::vector<int> versioned_keys = set.insert(key);
 
-      std::list<int> versioned_keys = set.get_versioned();
-
-      for (const auto &key : versioned_keys) {
+      for (auto &&key : versioned_keys) {
         std::cout << key << " ";
       }
 
@@ -45,4 +42,6 @@ int main() {
       throw std::runtime_error("Incorrect request.");
     }
   }
+
+  std::cout << std::endl;
 }

@@ -1,8 +1,6 @@
 #pragma once
 
 #include "AVL_Tree.hpp"
-#include <list>
-#include <utility>
 
 namespace hwt {
 template <typename T, typename Comp = std::less<T>>
@@ -14,7 +12,6 @@ public:
   using SearchTree<T>::nodes_;
 
 private:
-  std::list<T> ans{};
   Node *new_root_ = nullptr;
   std::unordered_map<T, NodePtr> new_nodes_{};
   Comp comp_;
@@ -33,42 +30,33 @@ private:
     return copy_ptr;
   }
 
-  Node *balance(Node *node) {
-    assert(node);
+  Node *copy_child(Node *&child) {
+    child = copy_node(child);
 
-    set_height(node);
-    set_size(node);
-    if (calculate_balance_factor(node) > 1) {
-      if (node->left_ && calculate_balance_factor(node->left_) < 0) {
-        rotate_left(node->left_);
-      }
-      return rotate_right(node);
-    } else if (calculate_balance_factor(node) < -1) {
-      if (node->right_ && calculate_balance_factor(node->right_) > 0) {
-        rotate_right(node->right_);
-      }
-      return rotate_left(node);
-    }
-    return node;
+    return child;
   }
 
-  Node *insert_node(Node *insertable) {
-    ans.clear();
-    Node *node = copy_node(root_);
+  std::vector<T> insert_node(Node *&insertable) {
+    if (!new_root_ && !root_) {
+      new_root_ = insertable;
+      return {};
+    }
 
-    Node *copy;
+    std::vector<T> versioned{};
+    Node *node = copy_node(root_);
+    Node *parent{};
 
     while (node) {
-      ans.push_back(node->key_);
+      versioned.push_back(node->key_);
+      node->parent_ = parent;
+      parent = node;
       if (comp_(insertable->key_, node->key_)) {
         if (!node->left_) {
           node->left_ = insertable;
           insertable->parent_ = node;
           break;
         }
-        copy = node;
-        node = copy_node(node->left_);
-        copy->left_ = node;
+        node = copy_child(node->left_);
       }
 
       else {
@@ -77,28 +65,23 @@ private:
           insertable->parent_ = node;
           break;
         }
-        copy = node;
-        node = copy_node(node->right_);
-        copy->right_ = node;
+        node = copy_child(node->right_);
       }
     }
 
-    set_new_parents();
-
     while (node->parent_) {
-      //  SearchTree<T>::balance(node);
+      SearchTree<T>::balance(node);
       node = node->parent_;
     }
 
-    // return SearchTree<T>::balance(node);
-    return node;
+    new_root_ = SearchTree<T>::balance(node);
+
+    return versioned;
   }
 
   void forget_old() {
-    for (auto &node : new_nodes_) {
-      auto node_it = nodes_.find(node.first);
-
-      if (node_it != nodes_.end()) {
+    for (auto &&node : new_nodes_) {
+      if (nodes_.find(node.first) != nodes_.end()) {
         std::swap(nodes_[node.first], node.second);
       }
 
@@ -107,6 +90,7 @@ private:
       }
     }
 
+    root_ = new_root_;
     forget_new();
   }
 
@@ -127,24 +111,10 @@ private:
     return new_node_ptr;
   }
 
-  void set_new_parents() {
-    for (auto &node_pair : new_nodes_) {
-      Node *node = node_pair.second.get();
-
-      if (node->right_) {
-        node->right_->parent_ = node;
-      }
-
-      if (node->left_) {
-        node->left_->parent_ = node;
-      }
-    }
-  }
-
   void set_old_parents() {
-    for (auto &node_pair : new_nodes_) {
+    for (auto &&node_pair : new_nodes_) {
       if (nodes_.find(node_pair.first) == nodes_.end()) {
-        break;
+        continue;
       }
 
       Node *node = node_pair.second.get();
@@ -159,8 +129,46 @@ private:
     }
   }
 
+  void swap(PermanentSet &other) {
+    std::swap(new_nodes_, other.new_nodes_);
+    std::swap(new_root_, other.new_root_);
+  }
+
 public:
   PermanentSet() : SearchTree<T>{} {}
+
+  PermanentSet(const PermanentSet &other)
+      : SearchTree<T>{static_cast<const SearchTree<T> &>(other)} {
+    for (auto &&node : other.new_nodes_) {
+      copy_node(node.second.get());
+    }
+
+    new_root_ = new_nodes_[other.new_root_->key_].get();
+  }
+
+  PermanentSet(PermanentSet &&other) noexcept
+      : SearchTree<T>{static_cast<SearchTree<T> &&>(std::move(other))} {
+    swap(other);
+  }
+
+  PermanentSet &operator=(const PermanentSet &other) {
+    if (this != &other) {
+      PermanentSet tmp{other};
+
+      SearchTree<T>::operator=(static_cast<const SearchTree<T> &>(tmp));
+      swap(tmp);
+    }
+
+    return *this;
+  }
+
+  PermanentSet &operator=(PermanentSet &&other) noexcept {
+    SearchTree<T>::operator=(static_cast<SearchTree<T> &&>(other));
+    swap(other);
+
+    return *this;
+  }
+
   ~PermanentSet() override = default;
 
   void reset() {
@@ -168,36 +176,51 @@ public:
     forget_new();
   }
 
-  std::list<T> get_versioned() const {
-    return ans;
-  };
-
-  void insert(const T &key) {
+  std::vector<T> insert(const T &key) {
     if (SearchTree<T>::search(root_, key)) {
-      return;
+      return {};
     }
 
-    if (!root_) {
-      SearchTree<T>::insert(key);
-      return;
+    if (new_root_) {
+      forget_old();
     }
 
-    if (!new_root_) {
-      new_root_ = insert_node(create_new(key));
-      return;
-    }
+    //#define DEBUG
 
-    root_ = new_root_;
+#ifdef DEBUG
 
-    forget_old();
-    new_root_ = insert_node(create_new(key));
+    std::cout << "INSERT: Key = " << key << std::endl;
+
+    print_old_nodes();
+    print_new_nodes();
+
+#endif
+
+    Node *new_node = create_new(key);
+    return insert_node(new_node);
+
+#ifdef DEBUG
+
+    print_old_nodes();
+    print_new_nodes();
+
+    std::cout << "EXIT INSERT" << std::endl;
+
+#endif
+  }
+
+  bool operator==(const PermanentSet &rhs) const {
+    return (
+        SearchTree<T>::operator==(static_cast<const SearchTree<T> &>(rhs)) &&
+        SearchTree<T>::is_equal(root_, rhs.new_root_));
   }
 
   void print_new_nodes() const {
     std::cout << "---NEW_NODES---" << std::endl;
 
     for (auto &node_pair : new_nodes_) {
-      std::cout << node_pair.first << std::endl;
+      std::cout << "Key: " << node_pair.first
+                << " Address: " << node_pair.second.get() << std::endl;
     }
 
     std::cout << "---------------" << std::endl;
@@ -207,27 +230,8 @@ public:
     std::cout << "---OLD_NODES---" << std::endl;
 
     for (auto &node_pair : nodes_) {
-      std::cout << node_pair.first << std::endl;
-    }
-
-    std::cout << "---------------" << std::endl;
-  }
-
-  void print_new_nodes_ptr() const {
-    std::cout << "---NEW_NODES---" << std::endl;
-
-    for (auto &node_pair : new_nodes_) {
-      std::cout << node_pair.second.get() << std::endl;
-    }
-
-    std::cout << "---------------" << std::endl;
-  }
-
-  void print_old_nodes_ptr() const {
-    std::cout << "---OLD_NODES---" << std::endl;
-
-    for (auto &node_pair : nodes_) {
-      std::cout << node_pair.second.get() << std::endl;
+      std::cout << "Key: " << node_pair.first
+                << " Address: " << node_pair.second.get() << std::endl;
     }
 
     std::cout << "---------------" << std::endl;
