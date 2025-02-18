@@ -210,9 +210,7 @@ public:
   }
 
   bool operator==(const PermanentSet &rhs) const {
-    return (
-        SearchTree<T>::operator==(static_cast<const SearchTree<T> &>(rhs)) &&
-        SearchTree<T>::is_equal(root_, rhs.new_root_));
+    return SearchTree<T>::is_equal(new_root_, rhs.new_root_);
   }
 
   void print_new_nodes() const {

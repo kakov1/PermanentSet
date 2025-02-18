@@ -11,9 +11,9 @@ using namespace hwt;
 class EteTests : public testing::Test {
 protected:
   std::string test(std::size_t test_number) {
-    std::ifstream test_file("./in/" + std::to_string(test_number) + "test.in");
+    std::ifstream test_file(std::to_string(test_number) + "test.in");
 
-    test_file.exceptions(std::ifstream::failbit);
+    test_file.exceptions(std::ifstream::badbit);
 
     PermanentSet<int> set;
 
@@ -21,15 +21,15 @@ protected:
     int key;
     std::string answer;
 
-    while (std::cin >> request) {
+    while (test_file >> request) {
       if (request == "k") {
-        std::cin >> key;
+        test_file >> key;
 
         set.insert(key);
 
       } else if (request == "s") {
-        std::cin >> request;
-        std::cin >> key;
+        test_file >> request;
+        test_file >> key;
 
         std::vector<int> versioned_keys = set.insert(key);
 
@@ -46,13 +46,17 @@ protected:
   }
 
   std::string get_answer(std::size_t test_number) {
-    std::ifstream answer_file("./out/" + std::to_string(test_number) +
-                              "test.out");
+    std::ifstream answer_file(std::to_string(test_number) + "test.out");
 
-    answer_file.exceptions(std::ifstream::failbit);
+    answer_file.exceptions(std::ifstream::badbit);
 
-    return std::string((std::istreambuf_iterator<char>(answer_file)),
-                       std::istreambuf_iterator<char>());
+    std::string buf, answer;
+
+    while (answer_file >> buf) {
+      answer += (buf + " ");
+    }
+
+    return answer;
   }
 };
 
@@ -62,7 +66,7 @@ protected:
   PermanentSet<int> set2;
 
   InterfaceTests() {
-    for (int i = 1; i < 50; ++i) {
+    for (int i = 1; i <= 50; ++i) {
       set1.insert(i);
     }
 
@@ -75,15 +79,6 @@ protected:
 TEST_F(InterfaceTests, TestConstructors) {
   PermanentSet<int> set_copy1 = set1;
   PermanentSet<int> set_copy2;
-
-  std::cout << set1.get_root()->height_ <<std::endl;
-  std::cout << set_copy1.get_root()->height_<<std::endl;
-
-  std::cout << (static_cast<const SearchTree<int> &>(set_copy1) ==
-                   static_cast<const SearchTree<int> &>(set1))
-            << std::endl;
-
-  /// set_copy1.is_equal(set_copy1.get_root(), )
 
   set1 = set1;
   set1 = std::move(set1);
