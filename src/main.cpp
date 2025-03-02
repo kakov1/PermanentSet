@@ -1,6 +1,7 @@
 #include "permanent_set.hpp"
 
 using namespace hwt;
+
 int main() {
   PermanentSet<int> set;
 
@@ -21,7 +22,7 @@ int main() {
       std::cin >> request;
 
       if (!std::cin.good() || request != "k") {
-        throw std::runtime_error("Next symbol should be \"k\"");
+        throw std::runtime_error("Next symbol must be \"k\"");
       }
 
       std::cin >> key;
@@ -30,7 +31,7 @@ int main() {
         throw std::runtime_error("Key must be integer.");
       }
 
-      std::vector<int> versioned_keys = set.insert(key);
+      std::deque<int> versioned_keys = set.insert(key);
 
       for (auto &&key : versioned_keys) {
         std::cout << key << " ";
@@ -38,6 +39,7 @@ int main() {
 
     } else if (request == "r") {
       set.reset();
+
     } else {
       throw std::runtime_error("Incorrect request.");
     }

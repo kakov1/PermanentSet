@@ -8,10 +8,12 @@
 
 using namespace hwt;
 
+const std::string TEST_DIR = std::string(TEST_DATA_DIR) + "/";
+
 class EteTests : public testing::Test {
 protected:
   std::string test(std::size_t test_number) {
-    std::ifstream test_file(std::to_string(test_number) + "test.in");
+    std::ifstream test_file(TEST_DIR + "in/" + std::to_string(test_number) + "test.in");
 
     test_file.exceptions(std::ifstream::badbit);
 
@@ -31,7 +33,7 @@ protected:
         test_file >> request;
         test_file >> key;
 
-        std::vector<int> versioned_keys = set.insert(key);
+        std::deque<int> versioned_keys = set.emplace(key);
 
         for (auto &&key : versioned_keys) {
           answer += std::to_string(key) + " ";
@@ -46,7 +48,8 @@ protected:
   }
 
   std::string get_answer(std::size_t test_number) {
-    std::ifstream answer_file(std::to_string(test_number) + "test.out");
+    std::ifstream answer_file(TEST_DIR + "out/" + std::to_string(test_number) +
+                              "test.out");
 
     answer_file.exceptions(std::ifstream::badbit);
 
@@ -67,11 +70,11 @@ protected:
 
   InterfaceTests() {
     for (int i = 1; i <= 50; ++i) {
-      set1.insert(i);
+      set1.emplace(i);
     }
 
     for (int i = 15; i >= 1; --i) {
-      set2.insert(i);
+      set2.emplace(i);
     }
   }
 };
@@ -112,8 +115,9 @@ TEST_F(InterfaceTests, TestAssign) {
 }
 
 TEST_F(EteTests, test) {
-  for (int i = 1; i <= 6; ++i)
+  for (int i = 1; i <= 7; ++i) {
     ASSERT_TRUE(test(i) == get_answer(i));
+  }
 }
 
 int main(int argc, char *argv[]) {

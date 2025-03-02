@@ -1,6 +1,8 @@
 #pragma once
 
 #include "AVL_Tree.hpp"
+#include <deque>
+#include <stack>
 
 namespace hwt {
 template <typename T, typename Comp = std::less<T>>
@@ -12,7 +14,7 @@ public:
   using SearchTree<T>::nodes_;
 
 private:
-  Node *new_root_ = nullptr;
+  Node *old_root_ = nullptr;
   std::unordered_map<T, NodePtr> new_nodes_{};
   Comp comp_;
 
@@ -36,13 +38,13 @@ private:
     return child;
   }
 
-  std::vector<T> insert_node(Node *&insertable) {
-    if (!new_root_ && !root_) {
-      new_root_ = insertable;
+  std::deque<T> insert_node(Node *&insertable) {
+    if (!root_) {
+      root_ = insertable;
       return {};
     }
 
-    std::vector<T> versioned{};
+    std::deque<T> versioned{};
     Node *node = copy_node(root_);
     Node *parent{};
 
@@ -70,11 +72,11 @@ private:
     }
 
     while (node->parent_) {
-      SearchTree<T>::balance(node);
       node = node->parent_;
     }
 
-    new_root_ = SearchTree<T>::balance(node);
+    old_root_ = root_;
+    root_ = node;
 
     return versioned;
   }
@@ -90,21 +92,29 @@ private:
       }
     }
 
-    root_ = new_root_;
-    forget_new();
+    new_nodes_.clear();
+    old_root_ = nullptr;
   }
 
   void forget_new() {
     new_nodes_.clear();
-    new_root_ = nullptr;
+    root_ = old_root_;
+    old_root_ = nullptr;
+  }
+
+  Node *tune_node(NodePtr &node) {
+    Node *new_node_ptr = node.get();
+
+    new_node_ptr->size_++;
+    new_node_ptr->height_++;
+
+    return new_node_ptr;
   }
 
   Node *create_new(const T &key) {
     NodePtr new_node = std::make_unique<Node>(key);
-    Node *new_node_ptr = new_node.get();
 
-    new_node_ptr->size_++;
-    new_node_ptr->height_++;
+    Node *new_node_ptr = tune_node(new_node);
 
     new_nodes_[new_node->key_] = std::move(new_node);
 
@@ -119,31 +129,42 @@ private:
 
       Node *node = node_pair.second.get();
 
-      if (node->right_) {
+      if (node->right_)
         node->right_->parent_ = nodes_[node_pair.first].get();
-      }
 
-      if (node->left_) {
+      if (node->left_)
         node->left_->parent_ = nodes_[node_pair.first].get();
-      }
     }
   }
 
   void swap(PermanentSet &other) {
     std::swap(new_nodes_, other.new_nodes_);
-    std::swap(new_root_, other.new_root_);
+    std::swap(old_root_, other.old_root_);
   }
 
 public:
   PermanentSet() : SearchTree<T>{} {}
 
-  PermanentSet(const PermanentSet &other)
-      : SearchTree<T>{static_cast<const SearchTree<T> &>(other)} {
-    for (auto &&node : other.new_nodes_) {
-      copy_node(node.second.get());
-    }
+  PermanentSet(const PermanentSet &other) {
+    root_ = copy_node(other.root_);
 
-    new_root_ = new_nodes_[other.new_root_->key_].get();
+    std::stack<std::pair<Node *, Node *>> stack;
+    stack.push({other.root_, root_});
+
+    while (!stack.empty()) {
+      auto [other_node, node] = stack.top();
+      stack.pop();
+
+      if (other_node->left_) {
+        node->left_ = copy_node(other_node->left_);
+        stack.push({other_node->left_, node->left_});
+      }
+
+      if (other_node->right_) {
+        node->right_ = copy_node(other_node->right_);
+        stack.push({other_node->right_, node->right_});
+      }
+    }
   }
 
   PermanentSet(PermanentSet &&other) noexcept
@@ -155,8 +176,8 @@ public:
     if (this != &other) {
       PermanentSet tmp{other};
 
-      SearchTree<T>::operator=(static_cast<const SearchTree<T> &>(tmp));
-      swap(tmp);
+      std::swap(root_, tmp.root_);
+      std::swap(new_nodes_, tmp.new_nodes_);
     }
 
     return *this;
@@ -171,18 +192,21 @@ public:
 
   ~PermanentSet() override = default;
 
+  bool operator==(const PermanentSet &rhs) const {
+    return SearchTree<T>::operator==(static_cast<const SearchTree<T> &>(rhs));
+  }
+
   void reset() {
+    if (!old_root_ && nodes_.size())
+      return;
+
     set_old_parents();
     forget_new();
   }
 
-  std::vector<T> insert(const T &key) {
+  std::deque<T> insert(const T &key) {
     if (SearchTree<T>::search(root_, key)) {
       return {};
-    }
-
-    if (new_root_) {
-      forget_old();
     }
 
     //#define DEBUG
@@ -193,11 +217,14 @@ public:
 
     print_old_nodes();
     print_new_nodes();
+    std::cout << root_ << std::endl;
 
 #endif
+    forget_old();
 
-    Node *new_node = create_new(key);
-    return insert_node(new_node);
+    Node *new_node_ptr = create_new(key);
+
+    return insert_node(new_node_ptr);
 
 #ifdef DEBUG
 
@@ -209,8 +236,19 @@ public:
 #endif
   }
 
-  bool operator==(const PermanentSet &rhs) const {
-    return SearchTree<T>::is_equal(new_root_, rhs.new_root_);
+  template <typename... Args> std::deque<T> emplace(Args &&...args) {
+    NodePtr new_node = std::make_unique<Node>(std::forward<Args>(args)...);
+
+    if (SearchTree<T>::search(root_, new_node->key_)) {
+      return {};
+    }
+
+    forget_old();
+
+    Node *new_node_ptr = tune_node(new_node);
+    new_nodes_[new_node->key_] = std::move(new_node);
+
+    return insert_node(new_node_ptr);
   }
 
   void print_new_nodes() const {
